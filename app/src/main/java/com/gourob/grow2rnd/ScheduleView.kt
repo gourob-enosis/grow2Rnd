@@ -92,7 +92,9 @@ val doctors = listOf("Dr. A", "Dr. B", "Dr. C", "Dr. D", "Dr. E")
 
 val schedules = listOf(
     ScheduleBlock("John Doe", "8:00 AM", "8:30 AM", "Dr. A"),
-    ScheduleBlock("Emma Smith", "8:10 AM", "8:40 AM", "Dr. A"),
+    ScheduleBlock("Gourob Smith", "8:40 AM", "9:40 AM", "Dr. B"),
+    ScheduleBlock("Alex Smith", "8:50 AM", "9:30 AM", "Dr. B"),
+    ScheduleBlock("Asad", "8:10 AM", "8:40 AM", "Dr. A"),
     ScheduleBlock("Michael Johnson", "9:30 AM", "11:30 AM", "Dr. C"),
     ScheduleBlock("Sophia Brown", "9:10 AM", "4:00 PM", "Dr. D"),
     ScheduleBlock("David Wilson", "4:00 PM", "5:00 PM", "Dr. E")
@@ -124,6 +126,9 @@ fun groupSchedulesByTimeBlock(): Map<String, List<ScheduleBlock>> {
 
 val groupedSchedule = groupSchedulesByTimeBlock()
 
+
+val groupedScheduleBlocks = schedules.groupBy { it.doctorName to it.baseTimeBlock }
+
 data class ScheduleBlock(
     val name: String,
     val startTime: String,
@@ -131,6 +136,21 @@ data class ScheduleBlock(
     val doctorName: String,
 ) {
 
+
+    val baseTimeBlock: String
+        get() = formatToBaseTime(startTime)
+
+    // Helper function to format time by replacing minutes with "00"
+    private fun formatToBaseTime(time: String): String {
+        val regex = Regex("(\\d{1,2}):(\\d{2})\\s?(AM|PM)", RegexOption.IGNORE_CASE)
+        val matchResult = regex.matchEntire(time)
+        return if (matchResult != null) {
+            val (hour, _, period) = matchResult.destructured
+            "$hour:00 $period"
+        } else {
+            time // Return as-is if the format is invalid
+        }
+    }
 
     fun getDoctorIndex(): Int {
         return doctors.indexOf(doctorName)
@@ -242,7 +262,6 @@ fun ScheduleView(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .freeScroll(freeScrollState)
                         .fillMaxSize()
-                        .background(Color.Cyan)
                 ) {
                     MainSection(timeSlots = timeSlots, doctors = doctors)
                 }
@@ -280,17 +299,34 @@ private fun MainSection(timeSlots: List<String>, doctors: List<String>) {
         }
     }
 
-    groupedSchedule.forEach { (timeSlot, schedules) ->
-        schedules.forEachIndexed{ index, schedule ->
+//    groupedSchedule.forEach { (timeSlot, schedules) ->
+//        schedules.forEachIndexed{ index, schedule ->
+//            Slot(
+//                modifier = Modifier
+//                    .offset(
+//                        x = schedule.getDoctorIndex().times(mainTileWidth)   ,
+//                        y = schedule.getTimeSlotIndex()
+//                            .times(mainTileHeight) + schedule.getGridTopOffset().dp
+//                    )
+//                    .height(schedule.getHeightOfBlock().dp)
+//                    .width(mainTileWidth / getCountOfSlotInBaseTimeForDoctor(schedule)),
+//                scheduleBlock = schedule
+//            )
+//        }
+//    }
+
+    groupedScheduleBlocks.forEach { (doctorBaseTimePair, schedules) ->
+        schedules.forEachIndexed { index, schedule ->
             Slot(
                 modifier = Modifier
                     .offset(
-                        x = schedule.getDoctorIndex().times(mainTileWidth) +  ,
+                        x = schedule.getDoctorIndex().times(mainTileWidth) +  (mainTileWidth / schedules.size) * index ,
                         y = schedule.getTimeSlotIndex()
                             .times(mainTileHeight) + schedule.getGridTopOffset().dp
                     )
                     .height(schedule.getHeightOfBlock().dp)
-                    .width(mainTileWidth / getCountOfSlotInBaseTimeForDoctor(schedule)),
+                    .width(mainTileWidth / getCountOfSlotInBaseTimeForDoctor(schedule))
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
                 scheduleBlock = schedule
             )
         }
@@ -557,9 +593,10 @@ private fun TopSectionPreview() {
 
 
 fun main() {
-    groupedSchedule.forEach { key, list ->
-        println("  $key  ")
-        println(list)
+    val groupedScheduleBlocks = schedules.groupBy { it.doctorName to it.baseTimeBlock }
+
+    groupedScheduleBlocks.forEach { (key, value) ->
+        println("DoctorName: ${key.first}, BaseTime: ${key.second}")
+        println("ScheduleBlocks: $value")
     }
-    println(groupedSchedule)
 }
