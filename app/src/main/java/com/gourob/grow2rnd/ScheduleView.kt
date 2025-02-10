@@ -336,7 +336,7 @@ fun Slot(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                "${scheduleBlock.startTime} ${scheduleBlock.endTime}",
+                "${scheduleBlock.startTime} - ${scheduleBlock.endTime}",
                 color = primaryTextColor,
                 fontWeight = FontWeight.Medium,
                 fontSize = 12.sp,
