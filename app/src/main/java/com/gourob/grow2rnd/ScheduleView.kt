@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ModifierInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,58 +52,6 @@ import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
 import kotlin.random.Random
-
-
-@Composable
-fun ScheduleView(modifier: Modifier = Modifier) {
-    val freeScrollState = rememberFreeScrollState()
-
-    Column(modifier = modifier.fillMaxSize()) {
-        //DateSection
-        DateSection()
-
-        Spacer(Modifier.height(16.dp))
-        // Header Row (Doctors' Names)
-        Row {
-            Box(
-                Modifier
-                    .width(tileWidth)
-                    .height(tileHeight),
-                contentAlignment = Alignment.Center
-            ) {
-
-            }
-            HeaderSection(
-                Modifier
-                    .fillMaxWidth()
-                    .freeScroll(state = freeScrollState)
-            )
-        }
-
-        // Left Column (Time Slots)
-        Row{
-            TimeSlotSection(
-                modifier = Modifier
-                    .width(tileWidth)
-                    .freeScroll(freeScrollState)
-            )
-
-            // Main Content
-            Box(modifier = Modifier.freeScroll(freeScrollState)) {
-                MainSection(timeSlots = timeSlots, doctors = doctors)
-            }
-
-        }
-
-    }
-}
-
-
-@Preview(showBackground = true)
-@Composable
-private fun DefaultPreview() {
-    ScheduleView()
-}
 
 
 val tileHeight = 90.dp
@@ -137,14 +86,12 @@ val timeSlots = listOf(
 )
 
 val doctors = listOf("Dr. A", "Dr. B", "Dr. C", "Dr. D", "Dr. E")
-//val doctors = listOf("Dr. A", "Dr. B", "Dr. C",)
-//val doctors = listOf("Dr. A")
 
 val schedules = listOf(
-    ScheduleBlock("John Doe", "8:00 AM", "9:00 AM", "Dr. A"),
-    ScheduleBlock("Emma Smith", "9:00 AM", "10:00 AM", "Dr. B"),
-    ScheduleBlock("Michael Johnson", "10:00 AM", "11:00 AM", "Dr. C"),
-    ScheduleBlock("Sophia Brown", "3:00 PM", "4:00 PM", "Dr. D"),
+    ScheduleBlock("John Doe", "8:00 AM", "8:30 AM", "Dr. A"),
+    ScheduleBlock("Emma Smith", "8:40 AM", "9:50 AM", "Dr. A"),
+    ScheduleBlock("Michael Johnson", "9:00 AM", "11:00 AM", "Dr. A"),
+    ScheduleBlock("Sophia Brown", "9:10 AM", "4:00 PM", "Dr. A"),
     ScheduleBlock("David Wilson", "4:00 PM", "5:00 PM", "Dr. E")
 )
 
@@ -177,6 +124,12 @@ data class ScheduleBlock(
         val minuteFraction = minutes / 60.0
         return (minuteFraction * mainTileHeight.value.toDouble()).roundToInt()
     }
+
+    fun getTimeDiffInMinutes(): Int {
+        val start = LocalTime.parse(startTime, formatter)
+        val end = LocalTime.parse(endTime, formatter)
+        return (end.toSecondOfDay() - start.toSecondOfDay()) / 60
+    }
 }
 
 
@@ -192,8 +145,8 @@ fun startTimeInThisRange(startTime: String, timeSlotStarting: String): Boolean {
 }
 
 
-fun getScheduleToPlaceIn(timeRangeIndex: Int, doctorColumnIndex: Int): ScheduleBlock? {
-    return schedules.firstOrNull { schedule ->
+fun getSchedulesToPlaceIn(timeRangeIndex: Int, doctorColumnIndex: Int): List<ScheduleBlock> {
+    return schedules.filter { schedule ->
         val timeSlot = timeSlots[timeRangeIndex]
         val doctorName = doctors[doctorColumnIndex]
         schedule.doctorName == doctorName && startTimeInThisRange(schedule.startTime, timeSlot)
@@ -202,7 +155,64 @@ fun getScheduleToPlaceIn(timeRangeIndex: Int, doctorColumnIndex: Int): ScheduleB
 
 
 @Composable
+fun ScheduleView(modifier: Modifier = Modifier) {
+    val freeScrollState = rememberFreeScrollState()
+
+    Column(modifier = modifier.fillMaxSize()) {
+        //DateSection
+        DateSection()
+
+        Spacer(Modifier.height(16.dp))
+        // Header Row (Doctors' Names)
+        Row {
+            Box(
+                Modifier
+                    .width(tileWidth)
+                    .height(tileHeight),
+                contentAlignment = Alignment.Center
+            ) {
+
+            }
+            HeaderSection(
+                Modifier
+                    .fillMaxWidth()
+                    .freeScroll(state = freeScrollState)
+            )
+        }
+
+        // Left Column (Time Slots)
+        Row {
+            TimeSlotSection(
+                modifier = Modifier
+                    .width(tileWidth)
+                    .freeScroll(freeScrollState)
+            )
+
+            // Main Content
+            Box(
+                modifier = Modifier
+                    .freeScroll(freeScrollState)
+            ) {
+                MainSection(timeSlots = timeSlots, doctors = doctors)
+            }
+
+        }
+
+    }
+}
+
+
+@Preview(showBackground = true)
+@Composable
+private fun DefaultPreview() {
+    ScheduleView()
+}
+
+
+
+@Composable
 private fun MainSection(timeSlots: List<String>, doctors: List<String>) {
+    // background blocks
     Column {
         Row {
             repeat(doctors.size) { _ ->
@@ -220,31 +230,39 @@ private fun MainSection(timeSlots: List<String>, doctors: List<String>) {
             }
         }
     }
+
     Column {
         Row {
             repeat(doctors.size) { doctorIndex ->
                 Column {
                     repeat(timeSlots.size) { timeSlotIndex ->
-                        val schedule = getScheduleToPlaceIn(timeSlotIndex, doctorIndex)
-
-                        if (schedule != null) {
-                            Box(
-                                Modifier
-                                    .width(mainTileWidth)
-                                    .height(schedule.getHeightOfBlock().dp)
-                                    .padding(horizontal = 4.dp, vertical = 2.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                MainSectionContent(schedule)
-                            }
-                        } else {
+                        val schedules = getSchedulesToPlaceIn(timeSlotIndex, doctorIndex)
+                        if (schedules.isEmpty()) {
                             Box(
                                 Modifier
                                     .width(mainTileWidth)
                                     .height(mainTileHeight),
-                                //.border(1.dp, Color.Gray),
                                 contentAlignment = Alignment.Center
                             ) {}
+                        } else {
+                            Row(
+                                Modifier
+                                    .width(mainTileWidth)
+                                    .padding(horizontal = 2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                schedules.forEach { schedule ->
+                                    Box(
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Slot(
+                                            modifier = Modifier,
+                                            schedule
+                                        )
+                                    }
+
+                                }
+                            }
                         }
                     }
                 }
@@ -295,18 +313,8 @@ private fun HeaderSection(modifier: Modifier) {
 }
 
 @Composable
-fun MainSectionContent(scheduleBlock: ScheduleBlock) {
-    Column(
-        modifier = Modifier
-            .padding(3.dp)
-            .clip(RoundedCornerShape(10.dp)),
-    ) {
-        Slot(scheduleBlock)
-    }
-}
-
-@Composable
 fun Slot(
+    modifier: Modifier,
     scheduleBlock: ScheduleBlock,
     showMarker: Boolean = Random.nextBoolean()
 ) {
@@ -314,20 +322,22 @@ fun Slot(
     val markerColors = listOf(Color.Red, Color.Green)
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .offset(y = scheduleBlock.getGridTopOffset().dp, x = 0.dp)
             .height(scheduleBlock.getHeightOfBlock().dp)
-            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .border(1.dp, Color.Cyan,RoundedCornerShape(10.dp) )
             .background(colors.random())
+
+            .fillMaxWidth(),
     ) {
         Column(
             Modifier
                 .padding(4.dp)
                 .padding(horizontal = if (showMarker) 4.dp else 0.dp)
-                .padding(horizontal = 4.dp)
         ) {
             Text(
-                scheduleBlock.name,
+                scheduleBlock.name + " " + scheduleBlock.doctorName,
                 color = primaryTextColor,
                 fontWeight = FontWeight.Medium,
                 fontSize = 13.sp,
@@ -335,15 +345,17 @@ fun Slot(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Text(
-                "${scheduleBlock.startTime} - ${scheduleBlock.endTime}",
-                color = primaryTextColor,
-                fontWeight = FontWeight.Medium,
-                fontSize = 12.sp,
-                fontFamily = CeraPro,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            if (scheduleBlock.getTimeDiffInMinutes() >= 15) {
+                Text(
+                    "${scheduleBlock.startTime} - ${scheduleBlock.endTime}",
+                    color = primaryTextColor,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 12.sp,
+                    fontFamily = CeraPro,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
 
 
@@ -354,10 +366,7 @@ fun Slot(
                     .height(scheduleBlock.getHeightOfBlock().dp)
                     .clip(
                         RoundedCornerShape(
-                            topStart = 10.dp,
-                            topEnd = 0.dp,
-                            bottomStart = 10.dp,
-                            bottomEnd = 0.dp
+                            topStart = 10.dp, topEnd = 0.dp, bottomStart = 10.dp, bottomEnd = 0.dp
                         )
                     )
                     .background(markerColors.random())
@@ -395,6 +404,7 @@ fun HeaderSectionContent(modifier: Modifier = Modifier, doctorName: String) {
                 fontFamily = CeraPro,
             )
         }
+
         Text(
             "$381.99",
             color = primaryTextColor,
@@ -530,10 +540,13 @@ fun main() {
     repeat(doctors.size) { doctorIndex ->
         repeat(timeSlots.size) { timeSlotIndex ->
             println("${doctors[doctorIndex]}  ${timeSlots[timeSlotIndex]}")
-            val schedule = getScheduleToPlaceIn(timeSlotIndex, doctorIndex)
-            if (schedule != null) {
-                println("Place schedule $schedule in time slot ${timeSlots[timeSlotIndex]} for doctor ${doctors[doctorIndex]}")
+            val schedules = getSchedulesToPlaceIn(timeSlotIndex, doctorIndex)
+
+            schedules.forEach { schedule ->
+                println("Place schedule $schedule in time slot ${timeSlots[timeSlotIndex]} for doctor ${doctors[doctorIndex]} with height ${schedule.getHeightOfBlock()}")
+
             }
+
         }
     }
 }
