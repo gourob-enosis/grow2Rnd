@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,15 +35,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ModifierInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.times
 import com.chihsuanwu.freescroll.freeScroll
 import com.chihsuanwu.freescroll.rememberFreeScrollState
+import com.gourob.grow2rnd.ScheduleBlock.Companion
 import com.gourob.grow2rnd.ui.theme.CeraPro
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -89,12 +92,37 @@ val doctors = listOf("Dr. A", "Dr. B", "Dr. C", "Dr. D", "Dr. E")
 
 val schedules = listOf(
     ScheduleBlock("John Doe", "8:00 AM", "8:30 AM", "Dr. A"),
-    ScheduleBlock("Emma Smith", "8:40 AM", "9:50 AM", "Dr. A"),
-    ScheduleBlock("Michael Johnson", "9:00 AM", "11:00 AM", "Dr. A"),
-    ScheduleBlock("Sophia Brown", "9:10 AM", "4:00 PM", "Dr. A"),
+    ScheduleBlock("Emma Smith", "8:10 AM", "8:40 AM", "Dr. A"),
+    ScheduleBlock("Michael Johnson", "9:30 AM", "11:30 AM", "Dr. C"),
+    ScheduleBlock("Sophia Brown", "9:10 AM", "4:00 PM", "Dr. D"),
     ScheduleBlock("David Wilson", "4:00 PM", "5:00 PM", "Dr. E")
 )
 
+fun getCountOfSlotInBaseTimeForDoctor(schedule: ScheduleBlock): Int {
+    val baseTimeIndex = schedule.getTimeSlotIndex()
+    val doctorIndex = schedule.getDoctorIndex()
+
+    return schedules.filter { it.getTimeSlotIndex() == baseTimeIndex && it.getDoctorIndex() == doctorIndex }.size
+}
+
+fun groupSchedulesByTimeBlock(): Map<String, List<ScheduleBlock>> {
+    val formatter = DateTimeFormatter.ofPattern("h:mm a")
+
+    // Create a map of time slot -> list of schedules
+    return timeSlots.associateWith { timeSlot ->
+
+        val slotStart = LocalTime.parse(timeSlot, ScheduleBlock.formatter)
+        val slotEnd = slotStart.plusMinutes(59)
+
+        // Filter schedules where the starting time matches the time slot exactly
+        schedules.filter { schedule ->
+            val scheduleStart = LocalTime.parse(schedule.startTime, formatter)
+            scheduleStart in slotStart..slotEnd
+        }
+    }
+}
+
+val groupedSchedule = groupSchedulesByTimeBlock()
 
 data class ScheduleBlock(
     val name: String,
@@ -102,6 +130,20 @@ data class ScheduleBlock(
     val endTime: String,
     val doctorName: String,
 ) {
+
+
+    fun getDoctorIndex(): Int {
+        return doctors.indexOf(doctorName)
+    }
+
+    fun getTimeSlotIndex(): Int {
+        val startTime = LocalTime.parse(startTime, formatter)
+        return timeSlots.indexOfFirst { timeSlot ->
+            val slotStart = LocalTime.parse(timeSlot, formatter)
+            val slotEnd = slotStart.plusMinutes(59)
+            startTime in slotStart..slotEnd
+        }
+    }
 
     companion object {
         val formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
@@ -114,9 +156,8 @@ data class ScheduleBlock(
     }
 
     fun getHeightOfBlock(): Int {
-        return (getTimeSpanInHour() * mainTileHeight.value.toDouble()).roundToInt() - 2
+        return (getTimeSpanInHour() * mainTileHeight.value.toDouble()).roundToInt()
     }
-
 
     fun getGridTopOffset(): Int {
         val start = LocalTime.parse(startTime, formatter)
@@ -181,23 +222,32 @@ fun ScheduleView(modifier: Modifier = Modifier) {
         }
 
         // Left Column (Time Slots)
-        Row {
-            TimeSlotSection(
-                modifier = Modifier
-                    .width(tileWidth)
-                    .freeScroll(freeScrollState)
-            )
-
-            // Main Content
-            Box(
-                modifier = Modifier
-                    .freeScroll(freeScrollState)
+        Box(
+            Modifier
+                .height(timeSlots.size.times(mainTileHeight))
+                .width(doctors.size.times(mainTileWidth)),
+            contentAlignment = Alignment.TopStart
+        ) {
+            Row(
+                modifier = Modifier.fillMaxHeight()
             ) {
-                MainSection(timeSlots = timeSlots, doctors = doctors)
+                TimeSlotSection(
+                    modifier = Modifier
+                        .width(tileWidth)
+                        .freeScroll(freeScrollState)
+                )
+
+                // Main Content
+                Box(
+                    modifier = Modifier
+                        .freeScroll(freeScrollState)
+                        .fillMaxSize()
+                        .background(Color.Cyan)
+                ) {
+                    MainSection(timeSlots = timeSlots, doctors = doctors)
+                }
             }
-
         }
-
     }
 }
 
@@ -207,7 +257,6 @@ fun ScheduleView(modifier: Modifier = Modifier) {
 private fun DefaultPreview() {
     ScheduleView()
 }
-
 
 
 @Composable
@@ -231,42 +280,19 @@ private fun MainSection(timeSlots: List<String>, doctors: List<String>) {
         }
     }
 
-    Column {
-        Row {
-            repeat(doctors.size) { doctorIndex ->
-                Column {
-                    repeat(timeSlots.size) { timeSlotIndex ->
-                        val schedules = getSchedulesToPlaceIn(timeSlotIndex, doctorIndex)
-                        if (schedules.isEmpty()) {
-                            Box(
-                                Modifier
-                                    .width(mainTileWidth)
-                                    .height(mainTileHeight),
-                                contentAlignment = Alignment.Center
-                            ) {}
-                        } else {
-                            Row(
-                                Modifier
-                                    .width(mainTileWidth)
-                                    .padding(horizontal = 2.dp),
-                                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                            ) {
-                                schedules.forEach { schedule ->
-                                    Box(
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Slot(
-                                            modifier = Modifier,
-                                            schedule
-                                        )
-                                    }
-
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+    groupedSchedule.forEach { (timeSlot, schedules) ->
+        schedules.forEachIndexed{ index, schedule ->
+            Slot(
+                modifier = Modifier
+                    .offset(
+                        x = schedule.getDoctorIndex().times(mainTileWidth) +  ,
+                        y = schedule.getTimeSlotIndex()
+                            .times(mainTileHeight) + schedule.getGridTopOffset().dp
+                    )
+                    .height(schedule.getHeightOfBlock().dp)
+                    .width(mainTileWidth / getCountOfSlotInBaseTimeForDoctor(schedule)),
+                scheduleBlock = schedule
+            )
         }
     }
 }
@@ -314,7 +340,7 @@ private fun HeaderSection(modifier: Modifier) {
 
 @Composable
 fun Slot(
-    modifier: Modifier,
+    modifier: Modifier = Modifier,
     scheduleBlock: ScheduleBlock,
     showMarker: Boolean = Random.nextBoolean()
 ) {
@@ -323,12 +349,8 @@ fun Slot(
 
     Box(
         modifier = modifier
-            .offset(y = scheduleBlock.getGridTopOffset().dp, x = 0.dp)
-            .height(scheduleBlock.getHeightOfBlock().dp)
             .clip(RoundedCornerShape(10.dp))
-            .border(1.dp, Color.Cyan,RoundedCornerShape(10.dp) )
             .background(colors.random())
-
             .fillMaxWidth(),
     ) {
         Column(
@@ -535,18 +557,9 @@ private fun TopSectionPreview() {
 
 
 fun main() {
-    println(timeSlots)
-    println(doctors)
-    repeat(doctors.size) { doctorIndex ->
-        repeat(timeSlots.size) { timeSlotIndex ->
-            println("${doctors[doctorIndex]}  ${timeSlots[timeSlotIndex]}")
-            val schedules = getSchedulesToPlaceIn(timeSlotIndex, doctorIndex)
-
-            schedules.forEach { schedule ->
-                println("Place schedule $schedule in time slot ${timeSlots[timeSlotIndex]} for doctor ${doctors[doctorIndex]} with height ${schedule.getHeightOfBlock()}")
-
-            }
-
-        }
+    groupedSchedule.forEach { key, list ->
+        println("  $key  ")
+        println(list)
     }
+    println(groupedSchedule)
 }
